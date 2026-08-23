@@ -11,9 +11,10 @@ import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import type { DesktopLogger } from './desktop-logger.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
-const STATE_VERSION = 2
+const STATE_VERSION = 3
 const LEGACY_DEFAULT_CONTEXT_SIZE = 8_192
-const DEFAULT_CONTEXT_SIZE = 32_768
+const PREVIOUS_DEFAULT_CONTEXT_SIZE = 32_768
+const DEFAULT_CONTEXT_SIZE = 65_536
 const DEFAULT_GPU_LAYERS = 99
 const DEFAULT_STARTUP_TIMEOUT_MS = 10 * 60_000
 const HEALTH_POLL_MS = 500
@@ -51,7 +52,7 @@ interface LocalLlamaModelRecord {
 }
 
 interface LocalLlamaState {
-  readonly version: 2
+  readonly version: 3
   readonly models: readonly LocalLlamaModelRecord[]
   readonly selectedModelId?: string
   readonly contextSize: number
@@ -113,7 +114,7 @@ function modelRecord(value: unknown): LocalLlamaModelRecord | undefined {
 function parseState(value: unknown): LocalLlamaState {
   if (value === null || typeof value !== 'object') return defaultState()
   const record = value as StoredLocalLlamaState
-  if ((record.version !== 1 && record.version !== STATE_VERSION) || !Array.isArray(record.models)
+  if ((record.version !== 1 && record.version !== 2 && record.version !== STATE_VERSION) || !Array.isArray(record.models)
     || !integer(record.contextSize, 512, 262_144)
     || !integer(record.gpuLayers, 0, 999)
     || typeof record.speculativeDecoding !== 'boolean') return defaultState()
@@ -130,7 +131,8 @@ function parseState(value: unknown): LocalLlamaState {
     version: STATE_VERSION,
     models: Object.freeze(complete),
     ...(selectedModelId === undefined ? {} : { selectedModelId }),
-    contextSize: record.version === 1 && record.contextSize === LEGACY_DEFAULT_CONTEXT_SIZE
+    contextSize: (record.version === 1 && record.contextSize === LEGACY_DEFAULT_CONTEXT_SIZE)
+      || (record.version === 2 && record.contextSize === PREVIOUS_DEFAULT_CONTEXT_SIZE)
       ? DEFAULT_CONTEXT_SIZE
       : record.contextSize,
     gpuLayers: record.gpuLayers,
@@ -497,7 +499,7 @@ export class LocalLlamaRuntime {
     return this.state.models.find(model => model.id === this.state.selectedModelId)
   }
 
-  private replaceState(next: Omit<LocalLlamaState, 'version'> & { readonly version?: 2 }): void {
+  private replaceState(next: Omit<LocalLlamaState, 'version'> & { readonly version?: 3 }): void {
     const normalized = parseState({ ...next, version: STATE_VERSION })
     writeState(this.options.statePath, normalized)
     this.state = normalized

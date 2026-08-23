@@ -58,7 +58,7 @@ describe('local llama.cpp runtime', () => {
     })
 
     const view = await runtime.add(paths.modelPath)
-    expect(view).toMatchObject({ contextSize: 32_768, gpuLayers: 99, speculativeDecoding: false })
+    expect(view).toMatchObject({ contextSize: 65_536, gpuLayers: 99, speculativeDecoding: false })
     expect(view.models).toEqual([
       expect.objectContaining({ name: 'outside-model.gguf', size: 4, selected: true }),
     ])
@@ -184,12 +184,14 @@ describe('local llama.cpp runtime', () => {
   })
 
   it.each([
-    [8_192, 32_768],
-    [16_384, 16_384],
-  ])('migrates v1 context %i to %i without losing the registry', (storedContext, expectedContext) => {
+    [1, 8_192, 65_536],
+    [1, 16_384, 16_384],
+    [2, 32_768, 65_536],
+    [2, 49_152, 49_152],
+  ])('migrates v%i context %i to %i without losing the registry', (version, storedContext, expectedContext) => {
     const paths = fixture()
     writeFileSync(paths.statePath, `${JSON.stringify({
-      version: 1,
+      version,
       models: [{ id: 'model-1', path: paths.modelPath, name: 'outside-model.gguf', size: 4 }],
       selectedModelId: 'model-1',
       contextSize: storedContext,
@@ -214,7 +216,7 @@ describe('local llama.cpp runtime', () => {
       models: [expect.objectContaining({ name: 'outside-model.gguf', selected: true })],
     })
     expect(JSON.parse(readFileSync(paths.statePath, 'utf8'))).toMatchObject({
-      version: 2,
+      version: 3,
       contextSize: expectedContext,
     })
   })
