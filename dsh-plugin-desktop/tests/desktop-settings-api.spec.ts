@@ -8,6 +8,9 @@ import DesktopSettingsController, {
 import {
   handleDesktopDiagnosticsExportRequest,
   handleDesktopMarketSelectRequest,
+  handleDesktopLocalModelAddRequest,
+  handleDesktopLocalModelConfigureRequest,
+  handleDesktopLocalModelSelectRequest,
   handleDesktopProfileCreateRequest,
   handleDesktopProfileCreateWindowRequest,
   handleDesktopProfileDeleteRequest,
@@ -18,6 +21,7 @@ import {
   desktopSettingsRouteConstants,
 } from '../src/desktop-settings-route.ts'
 import type { DesktopProfileSummary } from '../src/profile-manager.ts'
+import type { LocalLlamaSettingsView } from '../src/local-llama-runtime.ts'
 
 const ORIGIN = 'http://127.0.0.1:43120'
 
@@ -44,6 +48,15 @@ const BROKEN: DesktopProfileSummary = {
   bundles: ['private-bundle'],
   webCapable: false,
   problem: 'failed to read /private/profiles/broken/package.json',
+}
+
+const LOCAL_LLAMA: LocalLlamaSettingsView = {
+  available: true,
+  status: 'stopped',
+  models: [],
+  contextSize: 8_192,
+  gpuLayers: 99,
+  speculativeDecoding: true,
 }
 
 function market(
@@ -75,6 +88,16 @@ function bootstrap(
     prepareProfileRollback: () => ({
       response: { accepted: true, restartRequired: true, targetProfile: 'desktop' },
     }),
+    localLlama: {
+      snapshot: () => LOCAL_LLAMA,
+      add: async () => LOCAL_LLAMA,
+      select: async () => LOCAL_LLAMA,
+      remove: async () => LOCAL_LLAMA,
+      configure: async () => LOCAL_LLAMA,
+      start: async () => LOCAL_LLAMA,
+      stop: async () => LOCAL_LLAMA,
+    },
+    pickModelFile: async () => null,
     ...overrides,
   }
 }
@@ -140,6 +163,7 @@ describe('desktop settings controller', () => {
         { name: 'broken', exists: true, webCapable: false, selectable: false, deletable: false },
       ],
       market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: false },
+      localLlama: LOCAL_LLAMA,
     })
     expect(JSON.stringify(controller.read())).not.toContain('/private')
     expect(JSON.stringify(controller.read())).not.toContain('private-bundle')
@@ -166,6 +190,7 @@ describe('desktop settings controller', () => {
         { name: 'work', exists: true, webCapable: true, selectable: true, deletable: false },
       ],
       market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: false },
+      localLlama: LOCAL_LLAMA,
     })
     expect(create).toHaveBeenCalledWith('work')
     expect(persistProfileSelection).not.toHaveBeenCalled()
@@ -191,6 +216,7 @@ describe('desktop settings controller', () => {
         { name: 'work', exists: true, webCapable: true, selectable: true, deletable: true },
       ],
       market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: false },
+      localLlama: LOCAL_LLAMA,
     })
     expect(remove).toHaveBeenCalledWith('work')
   })
@@ -303,6 +329,55 @@ describe('desktop settings controller', () => {
 })
 
 describe('desktop settings HTTP boundary', () => {
+  it('keeps local model paths native and validates exact local Runtime requests', async () => {
+    const add = vi.fn(async () => LOCAL_LLAMA)
+    const select = vi.fn(async () => LOCAL_LLAMA)
+    const configure = vi.fn(async () => LOCAL_LLAMA)
+    const pickModelFile = vi.fn(async () => 'C:\\private\\model.gguf')
+    const controller = new DesktopSettingsController(bootstrap({
+      localLlama: {
+        snapshot: () => LOCAL_LLAMA,
+        add,
+        select,
+        remove: async () => LOCAL_LLAMA,
+        configure,
+        start: async () => LOCAL_LLAMA,
+        stop: async () => LOCAL_LLAMA,
+      },
+      pickModelFile,
+    }))
+    const added = response()
+    const selected = response()
+    const configured = response()
+    const invalid = response()
+
+    await handleDesktopLocalModelAddRequest(jsonRequest({}), added, ORIGIN, controller)
+    await handleDesktopLocalModelSelectRequest(
+      jsonRequest({ id: 'model-1' }), selected, ORIGIN, controller,
+    )
+    await handleDesktopLocalModelConfigureRequest(
+      jsonRequest({ contextSize: 16_384, gpuLayers: 99, speculativeDecoding: false }),
+      configured,
+      ORIGIN,
+      controller,
+    )
+    await handleDesktopLocalModelAddRequest(
+      jsonRequest({ path: 'C:\\renderer-supplied.gguf' }), invalid, ORIGIN, controller,
+    )
+
+    expect(added.statusCode).toBe(200)
+    expect(pickModelFile).toHaveBeenCalledOnce()
+    expect(add).toHaveBeenCalledWith('C:\\private\\model.gguf')
+    expect(select).toHaveBeenCalledWith('model-1')
+    expect(configure).toHaveBeenCalledWith({
+      contextSize: 16_384,
+      gpuLayers: 99,
+      speculativeDecoding: false,
+    })
+    expect(invalid.statusCode).toBe(400)
+    expect(add).toHaveBeenCalledOnce()
+  })
+
   it('serves GET state with no-store headers and supports browser GET fetch metadata', async () => {
     const controller = new DesktopSettingsController(bootstrap())
     const req = request('GET', {
@@ -356,6 +431,7 @@ describe('desktop settings HTTP boundary', () => {
         { name: 'work', exists: true, webCapable: true, selectable: true, deletable: false },
       ],
       market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: false },
+      localLlama: LOCAL_LLAMA,
     })
     expect(create).toHaveBeenCalledWith('work')
   })

@@ -7,6 +7,11 @@ import type {
 import type { DesktopProfileSummary } from './profile-manager.ts'
 import type { DesktopProfiles } from './profile-service.ts'
 import type {
+  LocalLlamaConfiguration,
+  LocalLlamaRuntime,
+  LocalLlamaSettingsView,
+} from './local-llama-runtime.ts'
+import type {
   DesktopMarketSelectResponse,
   DesktopDiagnosticsExportResponse,
   DesktopProfileCreateResponse,
@@ -41,6 +46,10 @@ export interface DesktopSettingsControllerBootstrap {
   openProfileCreator(): void
   /** Prepare a last-known-good rollback without quiescing the Host yet. */
   prepareProfileRollback(): DesktopSettingsPostResponse<DesktopProfileRollbackResponse>
+  /** Launcher-owned local inference state and operations. */
+  localLlama: Pick<LocalLlamaRuntime, 'snapshot' | 'add' | 'select' | 'remove' | 'configure' | 'start' | 'stop'>
+  /** Native file chooser that never accepts a renderer-supplied path. */
+  pickModelFile(): Promise<string | null>
 }
 
 /** A persisted response plus work that must run only after `res.end()`. */
@@ -99,6 +108,7 @@ export class DesktopSettingsController {
         )),
       ),
       market: projectMarket(this.bootstrap.readMarket(), this.effectiveMarket),
+      localLlama: this.bootstrap.localLlama.snapshot(),
     })
   }
 
@@ -145,6 +155,37 @@ export class DesktopSettingsController {
       response: Object.freeze({ accepted: true, restartRequired }),
       ...(restartRequired ? { afterResponse: () => { this.bootstrap.scheduleRestart() } } : {}),
     })
+  }
+
+  /** Add one native-picked GGUF reference and make it active. */
+  async addLocalModel(): Promise<LocalLlamaSettingsView> {
+    const path = await this.bootstrap.pickModelFile()
+    return path === null ? this.bootstrap.localLlama.snapshot() : await this.bootstrap.localLlama.add(path)
+  }
+
+  /** Select one registered external GGUF. */
+  async selectLocalModel(id: string): Promise<LocalLlamaSettingsView> {
+    return await this.bootstrap.localLlama.select(id)
+  }
+
+  /** Remove one reference without deleting the model file. */
+  async removeLocalModel(id: string): Promise<LocalLlamaSettingsView> {
+    return await this.bootstrap.localLlama.remove(id)
+  }
+
+  /** Persist inference settings for the next local process generation. */
+  async configureLocalModel(config: LocalLlamaConfiguration): Promise<LocalLlamaSettingsView> {
+    return await this.bootstrap.localLlama.configure(config)
+  }
+
+  /** Explicitly load the active model. */
+  async startLocalModel(): Promise<LocalLlamaSettingsView> {
+    return await this.bootstrap.localLlama.start()
+  }
+
+  /** Explicitly unload the active model. */
+  async stopLocalModel(): Promise<LocalLlamaSettingsView> {
+    return await this.bootstrap.localLlama.stop()
   }
 
   /** Open the native terminal through the launcher-owned action. */

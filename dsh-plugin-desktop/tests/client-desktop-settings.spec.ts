@@ -25,6 +25,15 @@ const VIEW: DesktopSettingsView = {
     { name: 'work', exists: true, webCapable: true, selectable: true, deletable: true },
   ],
   market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: true },
+  localLlama: {
+    available: true,
+    status: 'stopped',
+    models: [{ id: 'model-1', name: 'model.gguf', size: 1024, selected: true }],
+    selectedModelId: 'model-1',
+    contextSize: 8_192,
+    gpuLayers: 99,
+    speculativeDecoding: true,
+  },
 }
 
 function json(value: unknown, status = 200): Response {
@@ -41,6 +50,11 @@ describe('Desktop settings API', () => {
       .toThrow('duplicate profile')
     expect(() => parseDesktopSettingsView({ ...VIEW, market: { ...VIEW.market, requested: 'unknown' } }))
       .toThrow('invalid Desktop settings response')
+    const projected = parseDesktopSettingsView({
+      ...VIEW,
+      localLlama: { ...VIEW.localLlama, models: [{ ...VIEW.localLlama.models[0], path: 'C:\\private.gguf' }] },
+    })
+    expect(JSON.stringify(projected)).not.toContain('private.gguf')
     expect(parseDesktopRestartAcceptance({ accepted: true, restartRequired: true }))
       .toEqual({ accepted: true, restartRequired: true })
     expect(parseDesktopRestartAcceptance({ accepted: true, restartRequired: false }))
@@ -55,6 +69,7 @@ describe('Desktop settings API', () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const path = String(input)
       if (path === desktopSettingsPaths.terminalOpen) return json({ accepted: true })
+      if (path.startsWith('/api/desktop/local-models/')) return json(VIEW.localLlama)
       return path === desktopSettingsPaths.settings || path === desktopSettingsPaths.profileCreate || path === desktopSettingsPaths.profileDelete
         ? json(VIEW)
         : json({ accepted: true, restartRequired: true })
@@ -66,6 +81,16 @@ describe('Desktop settings API', () => {
     await expect(api.selectProfile('work')).resolves.toEqual({ accepted: true, restartRequired: true })
     await expect(api.deleteProfile('work')).resolves.toEqual(VIEW)
     await expect(api.selectMarket('community-market')).resolves.toEqual({ accepted: true, restartRequired: true })
+    await expect(api.addLocalModel()).resolves.toEqual(VIEW.localLlama)
+    await expect(api.selectLocalModel('model-1')).resolves.toEqual(VIEW.localLlama)
+    await expect(api.removeLocalModel('model-1')).resolves.toEqual(VIEW.localLlama)
+    await expect(api.configureLocalModel({
+      contextSize: 16_384,
+      gpuLayers: 99,
+      speculativeDecoding: false,
+    })).resolves.toEqual(VIEW.localLlama)
+    await expect(api.startLocalModel()).resolves.toEqual(VIEW.localLlama)
+    await expect(api.stopLocalModel()).resolves.toEqual(VIEW.localLlama)
     await expect(api.openTerminal()).resolves.toBeUndefined()
 
     expect(fetcher.mock.calls.map(call => call[0])).toEqual([
@@ -74,6 +99,12 @@ describe('Desktop settings API', () => {
       desktopSettingsPaths.profileSelect,
       desktopSettingsPaths.profileDelete,
       desktopSettingsPaths.marketSelect,
+      desktopSettingsPaths.localModelAdd,
+      desktopSettingsPaths.localModelSelect,
+      desktopSettingsPaths.localModelRemove,
+      desktopSettingsPaths.localModelConfigure,
+      desktopSettingsPaths.localModelStart,
+      desktopSettingsPaths.localModelStop,
       desktopSettingsPaths.terminalOpen,
     ])
     expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
@@ -88,7 +119,13 @@ describe('Desktop settings API', () => {
     expect(fetcher.mock.calls[4]?.[1]).toMatchObject({
       body: JSON.stringify({ provider: 'community-market' }),
     })
-    expect(fetcher.mock.calls[5]?.[1]).toMatchObject({
+    expect(fetcher.mock.calls[5]?.[1]).toMatchObject({ body: JSON.stringify({}) })
+    expect(fetcher.mock.calls[6]?.[1]).toMatchObject({ body: JSON.stringify({ id: 'model-1' }) })
+    expect(fetcher.mock.calls[7]?.[1]).toMatchObject({ body: JSON.stringify({ id: 'model-1' }) })
+    expect(fetcher.mock.calls[8]?.[1]).toMatchObject({
+      body: JSON.stringify({ contextSize: 16_384, gpuLayers: 99, speculativeDecoding: false }),
+    })
+    expect(fetcher.mock.calls[11]?.[1]).toMatchObject({
       method: 'POST',
       body: JSON.stringify({}),
     })

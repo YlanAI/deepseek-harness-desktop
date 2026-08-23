@@ -6,6 +6,12 @@ const PROFILE_SELECT_PATH = '/api/desktop/profiles/select'
 const PROFILE_DELETE_PATH = '/api/desktop/profiles/delete'
 const MARKET_SELECT_PATH = '/api/desktop/market/select'
 const TERMINAL_OPEN_PATH = '/api/desktop/terminal/open'
+const LOCAL_MODEL_ADD_PATH = '/api/desktop/local-models/add'
+const LOCAL_MODEL_SELECT_PATH = '/api/desktop/local-models/select'
+const LOCAL_MODEL_REMOVE_PATH = '/api/desktop/local-models/remove'
+const LOCAL_MODEL_CONFIGURE_PATH = '/api/desktop/local-models/configure'
+const LOCAL_MODEL_START_PATH = '/api/desktop/local-models/start'
+const LOCAL_MODEL_STOP_PATH = '/api/desktop/local-models/stop'
 const MAX_PROFILES = 256
 const MAX_PROFILE_NAME_LENGTH = 255
 
@@ -33,6 +39,33 @@ export interface DesktopSettingsView {
   readonly current: string
   readonly profiles: readonly DesktopProfileView[]
   readonly market: DesktopMarketView
+  readonly localLlama: LocalLlamaView
+}
+
+export type LocalLlamaStatus = 'unavailable' | 'stopped' | 'starting' | 'ready' | 'stopping' | 'error'
+
+export interface LocalLlamaModelView {
+  readonly id: string
+  readonly name: string
+  readonly size: number
+  readonly selected: boolean
+}
+
+export interface LocalLlamaView {
+  readonly available: boolean
+  readonly status: LocalLlamaStatus
+  readonly detail?: string
+  readonly models: readonly LocalLlamaModelView[]
+  readonly selectedModelId?: string
+  readonly contextSize: number
+  readonly gpuLayers: number
+  readonly speculativeDecoding: boolean
+}
+
+export interface LocalLlamaConfiguration {
+  readonly contextSize: number
+  readonly gpuLayers: number
+  readonly speculativeDecoding: boolean
 }
 
 /** A persisted selection that requires a new Desktop generation. */
@@ -48,6 +81,12 @@ export interface DesktopSettingsApi {
   selectProfile(name: string): Promise<DesktopRestartAcceptance>
   deleteProfile(name: string): Promise<DesktopSettingsView>
   selectMarket(provider: DesktopMarketProvider): Promise<DesktopRestartAcceptance>
+  addLocalModel(): Promise<LocalLlamaView>
+  selectLocalModel(id: string): Promise<LocalLlamaView>
+  removeLocalModel(id: string): Promise<LocalLlamaView>
+  configureLocalModel(config: LocalLlamaConfiguration): Promise<LocalLlamaView>
+  startLocalModel(): Promise<LocalLlamaView>
+  stopLocalModel(): Promise<LocalLlamaView>
   openTerminal(): Promise<void>
 }
 
@@ -81,6 +120,52 @@ function parseProfile(value: unknown): DesktopProfileView {
   })
 }
 
+function parseLocalLlama(value: unknown): LocalLlamaView {
+  if (!isObject(value)
+    || typeof value.available !== 'boolean'
+    || !['unavailable', 'stopped', 'starting', 'ready', 'stopping', 'error'].includes(String(value.status))
+    || (value.detail !== undefined && typeof value.detail !== 'string')
+    || !Array.isArray(value.models)
+    || value.models.length > 256
+    || (value.selectedModelId !== undefined && typeof value.selectedModelId !== 'string')
+    || !Number.isSafeInteger(value.contextSize)
+    || !Number.isSafeInteger(value.gpuLayers)
+    || typeof value.speculativeDecoding !== 'boolean') {
+    throw new Error('dsh-plugin-desktop: invalid local llama.cpp settings response')
+  }
+  const models = value.models.map((candidate): LocalLlamaModelView => {
+    if (!isObject(candidate)
+      || typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 128
+      || typeof candidate.name !== 'string' || candidate.name.length === 0 || candidate.name.length > 512
+      || !Number.isSafeInteger(candidate.size) || Number(candidate.size) < 1
+      || typeof candidate.selected !== 'boolean') {
+      throw new Error('dsh-plugin-desktop: invalid local model settings response')
+    }
+    return Object.freeze({
+      id: candidate.id,
+      name: candidate.name,
+      size: candidate.size as number,
+      selected: candidate.selected,
+    })
+  })
+  if (new Set(models.map(model => model.id)).size !== models.length
+    || models.filter(model => model.selected).length > 1
+    || (value.selectedModelId !== undefined
+      && !models.some(model => model.id === value.selectedModelId && model.selected))) {
+    throw new Error('dsh-plugin-desktop: inconsistent local model settings response')
+  }
+  return Object.freeze({
+    available: value.available,
+    status: value.status as LocalLlamaStatus,
+    ...(value.detail === undefined ? {} : { detail: value.detail as string }),
+    models: Object.freeze(models),
+    ...(value.selectedModelId === undefined ? {} : { selectedModelId: value.selectedModelId as string }),
+    contextSize: value.contextSize as number,
+    gpuLayers: value.gpuLayers as number,
+    speculativeDecoding: value.speculativeDecoding,
+  })
+}
+
 /** Validate the bounded settings projection before it reaches React state. */
 export function parseDesktopSettingsView(value: unknown): DesktopSettingsView {
   if (!isObject(value)
@@ -90,6 +175,7 @@ export function parseDesktopSettingsView(value: unknown): DesktopSettingsView {
     || !Array.isArray(value.profiles)
     || value.profiles.length > MAX_PROFILES
     || !isObject(value.market)
+    || !isObject(value.localLlama)
     || !isMarketProvider(value.market.requested)
     || !isMarketProvider(value.market.effective)
     || typeof value.market.legacyDefaulted !== 'boolean') {
@@ -107,6 +193,7 @@ export function parseDesktopSettingsView(value: unknown): DesktopSettingsView {
       effective: value.market.effective,
       legacyDefaulted: value.market.legacyDefaulted,
     }),
+    localLlama: parseLocalLlama(value.localLlama),
   })
 }
 
@@ -176,6 +263,24 @@ export function createDesktopSettingsApi(fetcher: FetchLike = globalThis.fetch.b
     async selectMarket(provider: DesktopMarketProvider) {
       return parseDesktopRestartAcceptance(await readResponse(await post(fetcher, MARKET_SELECT_PATH, { provider })))
     },
+    async addLocalModel() {
+      return parseLocalLlama(await readResponse(await post(fetcher, LOCAL_MODEL_ADD_PATH, {})))
+    },
+    async selectLocalModel(id: string) {
+      return parseLocalLlama(await readResponse(await post(fetcher, LOCAL_MODEL_SELECT_PATH, { id })))
+    },
+    async removeLocalModel(id: string) {
+      return parseLocalLlama(await readResponse(await post(fetcher, LOCAL_MODEL_REMOVE_PATH, { id })))
+    },
+    async configureLocalModel(config: LocalLlamaConfiguration) {
+      return parseLocalLlama(await readResponse(await post(fetcher, LOCAL_MODEL_CONFIGURE_PATH, config)))
+    },
+    async startLocalModel() {
+      return parseLocalLlama(await readResponse(await post(fetcher, LOCAL_MODEL_START_PATH, {})))
+    },
+    async stopLocalModel() {
+      return parseLocalLlama(await readResponse(await post(fetcher, LOCAL_MODEL_STOP_PATH, {})))
+    },
     async openTerminal() {
       parseDesktopActionAcceptance(await readResponse(await post(fetcher, TERMINAL_OPEN_PATH, {})))
     },
@@ -189,4 +294,10 @@ export const desktopSettingsPaths = Object.freeze({
   profileDelete: PROFILE_DELETE_PATH,
   marketSelect: MARKET_SELECT_PATH,
   terminalOpen: TERMINAL_OPEN_PATH,
+  localModelAdd: LOCAL_MODEL_ADD_PATH,
+  localModelSelect: LOCAL_MODEL_SELECT_PATH,
+  localModelRemove: LOCAL_MODEL_REMOVE_PATH,
+  localModelConfigure: LOCAL_MODEL_CONFIGURE_PATH,
+  localModelStart: LOCAL_MODEL_START_PATH,
+  localModelStop: LOCAL_MODEL_STOP_PATH,
 })

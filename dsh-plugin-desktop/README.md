@@ -223,7 +223,11 @@ The output is `dsh-plugin-desktop\\dist\\DSH-Desktop-2.0.1-x64-Portable.zip`. Ex
 
 ## Model Experience
 
-None. The desktop package changes application composition and native presentation; it does not add model-visible instructions, tools, events, or request fields.
+The Windows x64 package includes a pinned, checksum-verified llama.cpp CUDA runtime through `extraResources`. GGUF files remain outside the installer and are registered only through a native file picker. The Electron main process owns the model registry, random loopback port, private API key, `llama-server` child process, and shutdown cleanup. The renderer receives model names, sizes, selection state, and inference settings, but never model paths.
+
+`dsh-plugin-desktop/local-llama` registers a dedicated `local-llama` Provider and uses the existing Pi AI adapter over the OpenAI-compatible loopback surface. The selected model starts lazily on the first request and can also be loaded or unloaded explicitly from settings. Existing API-key Providers remain unchanged, and neither Ollama nor a system CUDA Toolkit is required. Development and Windows packaging acquire the pinned runtime with `yarn runtime:fetch`; model directories must remain external and excluded by the root `.gitignore`.
+
+The desktop package does not add model-visible instructions, tools, events, or request fields.
 
 #### KV Cache effect
 

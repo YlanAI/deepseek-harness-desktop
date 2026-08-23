@@ -188,6 +188,9 @@ export interface DesktopRuntime {
   /** Open the desktop operating system's native workspace-folder chooser. */
   pickDirectory(): Promise<string | null>
 
+  /** Open the native file chooser for one external GGUF model. */
+  pickModelFile(): Promise<string | null>
+
   /** Open the isolated native Profile creator, focusing an existing instance. */
   openProfileCreateWindow(options: Omit<ProfileCreateWindowOptions, 'locale'>): void
 

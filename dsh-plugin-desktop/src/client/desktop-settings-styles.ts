@@ -157,6 +157,25 @@ const CSS = `
 .dshDesktopSettingsButtonSecondary { color: var(--dsw-alias-label-secondary); }
 .dshDesktopSettingsButtonDanger { color: var(--dsw-alias-state-error-primary); }
 .dshDesktopSettingsButton:disabled { cursor: default; opacity: .55; }
+.dshDesktopSettingsIconLabel { display: inline-flex; align-items: center; gap: 7px; }
+.dshDesktopSettingsIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.dshDesktopSettingsIconButton:hover:not(:disabled) { color: var(--dsw-alias-state-error-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.dshDesktopSettingsIconButton:disabled { cursor: default; opacity: .5; }
+.dshDesktopSettingsLocalHeader,
+.dshDesktopSettingsLocalActions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dshDesktopSettingsLocalForm { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr); align-items: end; gap: 10px; }
 .dshDesktopSettingsTerminalAction {
   display: flex;
   align-items: center;
@@ -240,6 +259,7 @@ const CSS = `
   .dshDesktopSettingsChoice,
   .dshDesktopSettingsToggleRow { align-items: flex-start; }
   .dshDesktopSettingsForm { align-items: stretch; flex-direction: column; }
+  .dshDesktopSettingsLocalForm { grid-template-columns: 1fr; }
 }
 `
 

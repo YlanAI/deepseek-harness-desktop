@@ -68,7 +68,7 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
   const runtime: DesktopRuntime = {
     platform,
     locale: 'en',
-    updates: {
+      updates: {
       isPackaged: false,
       canDownload: platform === 'darwin' || platform === 'win32',
       currentVersion: '2.0.0',
@@ -90,6 +90,7 @@ function createHarness(platform: DesktopRuntime['platform'] = 'darwin'): PluginH
     openTerminal: () => {},
     exportDiagnostics: async () => {},
     pickDirectory,
+    pickModelFile: async () => null,
     validateDirectory,
     openProfileCreateWindow: () => {},
     reportRendererBoot: rendererBoot,

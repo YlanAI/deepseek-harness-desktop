@@ -1,6 +1,7 @@
 /** Private same-origin Desktop settings API shared with the bundled renderer. */
 
 import type { DesktopMarketProvider } from './desktop-market.ts'
+import type { LocalLlamaSettingsView } from './local-llama-runtime.ts'
 
 /** Read the current Desktop-owned settings state. */
 export const DESKTOP_SETTINGS_PATH = '/api/desktop/settings'
@@ -28,6 +29,13 @@ export const DESKTOP_PROFILE_CREATE_WINDOW_PATH = '/api/desktop/profiles/create-
 
 /** Restore the last successful Profile and its latest healthy configuration. */
 export const DESKTOP_PROFILE_ROLLBACK_PATH = '/api/desktop/profiles/rollback'
+
+export const DESKTOP_LOCAL_MODEL_ADD_PATH = '/api/desktop/local-models/add'
+export const DESKTOP_LOCAL_MODEL_SELECT_PATH = '/api/desktop/local-models/select'
+export const DESKTOP_LOCAL_MODEL_REMOVE_PATH = '/api/desktop/local-models/remove'
+export const DESKTOP_LOCAL_MODEL_CONFIGURE_PATH = '/api/desktop/local-models/configure'
+export const DESKTOP_LOCAL_MODEL_START_PATH = '/api/desktop/local-models/start'
+export const DESKTOP_LOCAL_MODEL_STOP_PATH = '/api/desktop/local-models/stop'
 
 /** Renderer-safe projection of one discovered profile. */
 export interface DesktopSettingsProfileView {
@@ -61,7 +69,21 @@ export interface DesktopSettingsResponse {
   readonly profiles: readonly DesktopSettingsProfileView[]
   /** Market choice for the current and next generation. */
   readonly market: DesktopSettingsMarketView
+  /** Local GGUF registry and launcher-managed inference state. */
+  readonly localLlama: LocalLlamaSettingsView
 }
+
+export interface DesktopLocalModelIdRequest {
+  readonly id: string
+}
+
+export interface DesktopLocalModelConfigureRequest {
+  readonly contextSize: number
+  readonly gpuLayers: number
+  readonly speculativeDecoding: boolean
+}
+
+export type DesktopLocalModelResponse = LocalLlamaSettingsView
 
 /** Exact body accepted by the profile-creation endpoint. */
 export interface DesktopProfileCreateRequest {

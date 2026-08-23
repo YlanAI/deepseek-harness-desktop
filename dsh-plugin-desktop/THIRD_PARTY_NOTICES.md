@@ -1,4 +1,17 @@
 # Third-Party Notices
+
+## llama.cpp
+
+The Windows local-model runtime includes llama.cpp, distributed under the MIT
+License. Source and license: https://github.com/ggml-org/llama.cpp
+
+## NVIDIA CUDA runtime libraries
+
+The Windows CUDA local-model runtime includes redistributable NVIDIA CUDA
+runtime libraries. Use and redistribution are governed by the NVIDIA CUDA
+Toolkit End User License Agreement:
+https://docs.nvidia.com/cuda/eula/index.html
+
 DSH Desktop distributes the following third-party packages inside its installers.
 Each package ships with its own license text in the application files; this list records
 the package names, versions, and licenses for transparency.

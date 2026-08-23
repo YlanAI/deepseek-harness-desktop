@@ -6,8 +6,9 @@ import {
 import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  DesktopMarketProvider, DesktopProfileView, DesktopSettingsApi, DesktopSettingsView,
+  DesktopMarketProvider, DesktopProfileView, DesktopSettingsApi, DesktopSettingsView, LocalLlamaView,
 } from './desktop-settings-api.ts'
+import { FolderPlus, Play, Square, Trash2 } from 'lucide-react'
 import type { DesktopSettingsLocaleKey } from './desktop-settings-locales.ts'
 import type { DesktopClientPlatform } from './environment.ts'
 
@@ -44,6 +45,7 @@ export type DesktopSettingsSectionProps =
 
 type Translate = DesktopSettingsSectionProps['t']
 type BusyOperation = 'load' | 'create-profile' | 'select-profile' | 'delete-profile' | 'select-market' | 'mode' | 'notification'
+  | 'add-model' | 'select-model' | 'remove-model' | 'configure-model' | 'start-model' | 'stop-model'
 type RestartState = 'none' | 'restarting' | 'required'
 
 function useScope<T>(scope: SettingsScope<T>) {
@@ -152,6 +154,10 @@ function profileState(profile: DesktopProfileView, t: Translate): string {
   return profile.exists ? t('profileReady') : t('profileMissing')
 }
 
+function formatModelSize(bytes: number): string {
+  return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
+}
+
 const MARKET_OPTIONS: readonly {
   id: DesktopMarketProvider
   title: DesktopSettingsLocaleKey
@@ -204,6 +210,9 @@ export function DesktopSettingsSection({
   const [operationFailed, setOperationFailed] = useState(false)
   const [restart, setRestart] = useState<RestartState>('none')
   const [pendingProfileDelete, setPendingProfileDelete] = useState<string>()
+  const [contextSize, setContextSize] = useState('8192')
+  const [gpuLayers, setGpuLayers] = useState('99')
+  const [speculativeDecoding, setSpeculativeDecoding] = useState(true)
 
   const load = useCallback(async () => {
     setBusy('load')
@@ -219,6 +228,12 @@ export function DesktopSettingsSection({
   }, [api])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (view === undefined) return
+    setContextSize(String(view.localLlama.contextSize))
+    setGpuLayers(String(view.localLlama.gpuLayers))
+    setSpeculativeDecoding(view.localLlama.speculativeDecoding)
+  }, [view?.localLlama.contextSize, view?.localLlama.gpuLayers, view?.localLlama.speculativeDecoding])
   useEffect(() => {
     if (restart !== 'restarting') return
     const timer = setTimeout(() => { setRestart('required') }, 8_000)
@@ -284,6 +299,41 @@ export function DesktopSettingsSection({
     })
   }
 
+  const setLocalLlama = (localLlama: LocalLlamaView): void => {
+    setView(current => current === undefined ? current : { ...current, localLlama })
+  }
+
+  const addLocalModel = (): void => {
+    void run('add-model', async () => { setLocalLlama(await api.addLocalModel()) })
+  }
+
+  const selectLocalModel = (id: string): void => {
+    void run('select-model', async () => { setLocalLlama(await api.selectLocalModel(id)) })
+  }
+
+  const removeLocalModel = (id: string): void => {
+    void run('remove-model', async () => { setLocalLlama(await api.removeLocalModel(id)) })
+  }
+
+  const configureLocalModel = (event: FormEvent): void => {
+    event.preventDefault()
+    const nextContextSize = Number(contextSize)
+    const nextGpuLayers = Number(gpuLayers)
+    void run('configure-model', async () => {
+      setLocalLlama(await api.configureLocalModel({
+        contextSize: nextContextSize,
+        gpuLayers: nextGpuLayers,
+        speculativeDecoding,
+      }))
+    })
+  }
+
+  const setLocalModelRunning = (running: boolean): void => {
+    void run(running ? 'start-model' : 'stop-model', async () => {
+      setLocalLlama(running ? await api.startLocalModel() : await api.stopLocalModel())
+    })
+  }
+
   const setMode = (next: DesktopShellSettings['mode']): void => {
     void run('mode', async () => {
       await desktopSettings.set('mode', next)
@@ -308,6 +358,126 @@ export function DesktopSettingsSection({
           {t(restart === 'restarting' ? 'restarting' : 'restartRequired')}
         </p>
       )}
+
+      <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-local-model-title">
+        <div>
+          <h3 id="dsh-desktop-local-model-title">{t('localModelTitle')}</h3>
+          <p className="dshDesktopSettingsGroupIntro">{t('localModelIntro')}</p>
+        </div>
+        {view !== undefined && !view.localLlama.available && (
+          <p className="dshDesktopSettingsNotice">{t('localModelWindowsOnly')}</p>
+        )}
+        {view?.localLlama.detail !== undefined && (
+          <p className="dshDesktopSettingsError" role="alert">{view.localLlama.detail}</p>
+        )}
+        {view?.localLlama.available === true && (
+          <>
+            <div className="dshDesktopSettingsLocalHeader">
+              <span className="dshDesktopSettingsBadge">{t(`localStatus_${view.localLlama.status}`)}</span>
+              <button
+                type="button"
+                className="dshDesktopSettingsButton dshDesktopSettingsIconLabel"
+                disabled={busy !== undefined}
+                onClick={addLocalModel}
+              >
+                <FolderPlus size={15} aria-hidden="true" />
+                {t('addLocalModel')}
+              </button>
+            </div>
+            {view.localLlama.models.length === 0 && (
+              <p className="dshDesktopSettingsHint">{t('noLocalModels')}</p>
+            )}
+            <div className="dshDesktopSettingsList" role="radiogroup" aria-labelledby="dsh-desktop-local-model-title">
+              {view.localLlama.models.map(model => (
+                <Choice
+                  key={model.id}
+                  title={model.name}
+                  body={formatModelSize(model.size)}
+                  selected={model.selected}
+                  disabled={busy !== undefined || view.localLlama.status === 'starting' || view.localLlama.status === 'stopping'}
+                  action={() => { selectLocalModel(model.id) }}
+                  status={model.selected ? t('activeLocalModel') : undefined}
+                  aside={(
+                    <button
+                      type="button"
+                      className="dshDesktopSettingsIconButton"
+                      title={t('removeLocalModel')}
+                      aria-label={t('removeLocalModel')}
+                      disabled={busy !== undefined}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        removeLocalModel(model.id)
+                      }}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
+                  )}
+                />
+              ))}
+            </div>
+            <form className="dshDesktopSettingsLocalForm" onSubmit={configureLocalModel}>
+              <label className="dshDesktopSettingsField">
+                {t('contextSize')}
+                <input
+                  className="dshDesktopSettingsInput"
+                  type="number"
+                  min="512"
+                  max="262144"
+                  step="512"
+                  value={contextSize}
+                  disabled={busy !== undefined}
+                  onChange={event => { setContextSize(event.currentTarget.value) }}
+                />
+              </label>
+              <label className="dshDesktopSettingsField">
+                {t('gpuLayers')}
+                <input
+                  className="dshDesktopSettingsInput"
+                  type="number"
+                  min="0"
+                  max="999"
+                  step="1"
+                  value={gpuLayers}
+                  disabled={busy !== undefined}
+                  onChange={event => { setGpuLayers(event.currentTarget.value) }}
+                />
+              </label>
+              <ToggleRow
+                label={t('speculativeDecoding')}
+                checked={speculativeDecoding}
+                disabled={busy !== undefined}
+                onChange={setSpeculativeDecoding}
+              />
+              <button type="submit" className="dshDesktopSettingsButton" disabled={busy !== undefined}>
+                {t('saveLocalModelSettings')}
+              </button>
+            </form>
+            <div className="dshDesktopSettingsLocalActions">
+              {view.localLlama.status === 'ready' ? (
+                <button
+                  type="button"
+                  className="dshDesktopSettingsButton dshDesktopSettingsIconLabel"
+                  disabled={busy !== undefined}
+                  onClick={() => { setLocalModelRunning(false) }}
+                >
+                  <Square size={14} aria-hidden="true" />
+                  {t('unloadLocalModel')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="dshDesktopSettingsButton dshDesktopSettingsIconLabel"
+                  disabled={busy !== undefined || view.localLlama.selectedModelId === undefined}
+                  onClick={() => { setLocalModelRunning(true) }}
+                >
+                  <Play size={14} aria-hidden="true" />
+                  {busy === 'start-model' ? t('loadingLocalModel') : t('loadLocalModel')}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-profile-title">
         <div>

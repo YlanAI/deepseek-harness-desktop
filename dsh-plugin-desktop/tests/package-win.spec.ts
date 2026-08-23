@@ -45,7 +45,7 @@ describe('Windows x64 installer packaging', () => {
 
     packageWindowsInstaller(options(calls, logs))
 
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(4)
     expect(calls[0]).toEqual({
       command: 'C:\\Windows\\System32\\cmd.exe',
       args: [
@@ -58,6 +58,12 @@ describe('Windows x64 installer packaging', () => {
       env: { PATH: 'C:\\Windows\\System32', SAFE_VALUE: 'kept' },
     })
     expect(calls[1]).toEqual({
+      command: 'C:\\Windows\\System32\\cmd.exe',
+      args: ['/d', '/s', '/c', 'corepack yarn workspace dsh-plugin-desktop runtime:fetch'],
+      cwd: 'C:\\repo',
+      env: { PATH: 'C:\\Windows\\System32', SAFE_VALUE: 'kept' },
+    })
+    expect(calls[2]).toEqual({
       command: 'C:\\Program Files\\nodejs\\node.exe',
       args: [
         'C:\\repo\\node_modules\\electron-builder\\cli.js',
@@ -76,7 +82,7 @@ describe('Windows x64 installer packaging', () => {
         CSC_IDENTITY_AUTO_DISCOVERY: 'false',
       },
     })
-    expect(calls[2]).toEqual({
+    expect(calls[3]).toEqual({
       command: 'C:\\Program Files\\nodejs\\node.exe',
       args: ['C:\\repo\\dsh-plugin-desktop\\scripts\\verify-win-installer.ts'],
       cwd: 'C:\\repo\\dsh-plugin-desktop',
@@ -98,6 +104,9 @@ describe('Windows x64 installer packaging', () => {
     packageWindowsArtifact(value, 'zip', 'portable archive')
 
     expect(calls[1]?.args).toEqual([
+      '/d', '/s', '/c', 'corepack yarn workspace dsh-plugin-desktop runtime:fetch',
+    ])
+    expect(calls[2]?.args).toEqual([
       'C:\\repo\\node_modules\\electron-builder\\cli.js',
       '--win',
       'zip',
@@ -107,7 +116,7 @@ describe('Windows x64 installer packaging', () => {
       '--config.win.signExecutable=false',
       '--config.npmRebuild=false',
     ])
-    expect(calls[2]?.args).toEqual([
+    expect(calls[3]?.args).toEqual([
       'C:\\repo\\dsh-plugin-desktop\\scripts\\verify-win-portable.ts',
     ])
     expect(logs).toEqual([
@@ -128,8 +137,11 @@ describe('Windows x64 installer packaging', () => {
 
     packageWindowsInstaller(value)
 
-    expect(calls).toHaveLength(2)
+    expect(calls).toHaveLength(3)
     expect(calls[0]?.args).toEqual([
+      '/d', '/s', '/c', 'corepack yarn workspace dsh-plugin-desktop runtime:fetch',
+    ])
+    expect(calls[1]?.args).toEqual([
       'C:\\repo\\node_modules\\electron-builder\\cli.js',
       '--win',
       'nsis',

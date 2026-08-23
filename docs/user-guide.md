@@ -32,6 +32,14 @@ dsh-desktop:
 
 端口必须是 `0` 到 `65535` 之间的整数。修改后应用会有序重启，服务仍只监听 `127.0.0.1`。固定端口如果已被其他程序占用，Desktop 将无法启动；此时需要释放该端口，或把设置改回 `0` 或另一个空闲端口。
 
+## 本地 GGUF 模型
+
+Windows x64 版本内置固定版本的 `llama-server` CUDA Runtime，并注册独立的 **Local GGUF (llama.cpp)** Provider。现有 API Key Provider 保持不变；本地模型不使用 Ollama，也不需要单独安装 CUDA Toolkit。计算机仍需安装能够运行内置 CUDA 13.x Runtime 的 NVIDIA 驱动。
+
+在 Desktop 设置中选择 **添加本地模型**，通过系统文件选择器选取 `.gguf` 文件，再调整上下文长度、GPU layers 和 MTP 推测解码，保存后点击 **加载模型**。模型加载完成后，在普通模型选择器中选择 Local GGUF Provider。应用只保存外部文件引用，不会复制模型到安装目录或把模型放进安装包；移除引用和卸载模型都不会删除原始 `.gguf` 文件。
+
+第一版仅在 Windows x64 上启用本地 Runtime。模型加载可能需要数分钟，显存需求取决于模型量化、上下文长度和 GPU layers。加载失败时可先降低上下文长度或 GPU layers；MTP 与模型不兼容时应关闭该开关。退出应用会同时停止由 Desktop 启动的 `llama-server`。
+
 ## 插件管理
 
 插件是给 DSH 添加能力的扩展包，例如模型、工具、界面和工作流。DSH Desktop 使用的就是官方 Harness 的插件体系，官方插件可以直接安装使用；多个插件遵循统一的约定，可以一起安装、一起工作。

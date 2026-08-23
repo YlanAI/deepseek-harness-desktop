@@ -1,0 +1,27 @@
+diff --git a/lib/index.js b/lib/index.js
+index 8ec2b5a..194be89 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -2489,3 +2489,3 @@ function apply(ctx, config) {
+ }
+ //#endregion
+-export { Config, PiAiAdapter, apply, inject, name, recordKeyFor, supportedProtocols };
++export { Config, PiAiAdapter, apply, authContextFrom, credentialStoreFrom, inject, name, recordKeyFor, resolveProfiles, supportedProtocols };
+diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
+index 08a0390..ca31465 100644
+--- a/lib/types/index.d.ts
++++ b/lib/types/index.d.ts
+@@ -51,11 +51,11 @@
+  */
+ import type { Context } from '@deepseek-ai/cordis';
+ import { Config } from './config.ts';
+ export { PiAiAdapter } from './adapter.ts';
+ export type { PiAiAdapterOptions } from './adapter.ts';
+-export { Config } from './config.ts';
++export { Config, resolveProfiles } from './config.ts';
+ export type { PiAiCompatProfile, PiAiModality, PiAiModelOverride, PiAiModelProfile, PiAiProviderProfile, PiAiReasoningEfforts, PiAiThinkingFormat, ResolvedPiAiProviderProfile, } from './config.ts';
+-export { recordKeyFor } from './auth.ts';
++export { authContextFrom, credentialStoreFrom, recordKeyFor } from './auth.ts';
+ export { supportedProtocols } from './provider.ts';
+ export declare const name = "llm-pi-ai";
+ export declare const inject: string[];

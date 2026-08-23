@@ -32,6 +32,14 @@ dsh-desktop:
 
 The port must be an integer from `0` through `65535`. Changing it performs an orderly restart, and the service remains bound only to `127.0.0.1`. If another program already uses a fixed port, Desktop cannot start; release that port or change the setting back to `0` or another available port.
 
+## Local GGUF models
+
+The Windows x64 build includes a pinned `llama-server` CUDA runtime and registers a separate **Local GGUF (llama.cpp)** Provider. Existing API-key Providers remain unchanged. Local inference does not use Ollama and does not require a separately installed CUDA Toolkit, but the computer still needs an NVIDIA driver compatible with the bundled CUDA 13.x runtime.
+
+In Desktop settings, choose **Add local model** and select a `.gguf` file through the native file picker. Set the context size, GPU layers, and MTP speculative decoding, save the settings, then choose **Load model**. After loading completes, select the Local GGUF Provider in the normal model selector. The app stores only a reference to the external file; it does not copy models into the installation or installer. Removing a reference or unloading a model never deletes the original `.gguf` file.
+
+The first release enables the local runtime on Windows x64 only. Loading can take several minutes, and VRAM use depends on quantization, context size, and GPU layers. Reduce the context size or GPU layers when loading fails, and disable MTP when the model does not support it. Quitting the app also stops the `llama-server` process started by Desktop.
+
 ## Plugin management
 
 Plugins are extensions that add capabilities to DSH, such as models, tools, interfaces, and workflows. DSH Desktop uses the same plugin system as official Harness, so official plugins install and work directly; multiple plugins follow the same conventions and can be installed and used together.

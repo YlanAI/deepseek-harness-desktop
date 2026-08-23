@@ -31,7 +31,7 @@ export class DesktopStartupGeneration {
   readonly id = randomUUID()
 
   private readonly quiesceTimeoutMs: number
-  private readonly releases: Array<() => void> = []
+  private readonly releases: Array<() => void | Promise<void>> = []
   private host: DesktopStartupGenerationHost | undefined
   private hostDisposeTask: Promise<boolean> | undefined
   private releaseTask: Promise<void> | undefined
@@ -54,13 +54,16 @@ export class DesktopStartupGeneration {
   }
 
   /** Register one process-local resource and return its idempotent Host effect. */
-  own(release: () => void): () => void {
+  own(release: () => void | Promise<void>): () => Promise<void> {
     this.assertActive()
     let active = true
-    const releaseOnce = (): void => {
-      if (!active) return
+    let releaseTask: Promise<void> | undefined
+    const releaseOnce = (): Promise<void> => {
+      if (releaseTask !== undefined) return releaseTask
+      if (!active) return Promise.resolve()
       active = false
-      release()
+      releaseTask = Promise.resolve().then(release)
+      return releaseTask
     }
     this.releases.push(releaseOnce)
     return releaseOnce
@@ -103,7 +106,7 @@ export class DesktopStartupGeneration {
     }
     for (const release of this.releases.reverse()) {
       try {
-        release()
+        await release()
       } catch (cause) {
         failure ??= cause
       }

@@ -7,6 +7,8 @@ import type DesktopSettingsController from './desktop-settings-controller.ts'
 import type { DesktopSettingsPostResponse } from './desktop-settings-controller.ts'
 import type {
   DesktopMarketSelectRequest,
+  DesktopLocalModelConfigureRequest,
+  DesktopLocalModelIdRequest,
   DesktopProfileCreateRequest,
   DesktopProfileDeleteRequest,
   DesktopProfileSelectRequest,
@@ -148,10 +150,31 @@ function parseMarketRequest(value: unknown): DesktopMarketSelectRequest | undefi
   return { provider: value.provider }
 }
 
+function parseLocalModelIdRequest(value: unknown): DesktopLocalModelIdRequest | undefined {
+  if (!isExactRecord(value, 'id') || typeof value.id !== 'string'
+    || value.id.length === 0 || value.id.length > 128) return undefined
+  return { id: value.id }
+}
+
+function parseLocalModelConfiguration(value: unknown): DesktopLocalModelConfigureRequest | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)
+    || Object.keys(value).sort().join(',') !== 'contextSize,gpuLayers,speculativeDecoding') return undefined
+  const record = value as Record<string, unknown>
+  if (!Number.isSafeInteger(record.contextSize) || !Number.isSafeInteger(record.gpuLayers)
+    || typeof record.speculativeDecoding !== 'boolean') return undefined
+  return {
+    contextSize: record.contextSize as number,
+    gpuLayers: record.gpuLayers as number,
+    speculativeDecoding: record.speculativeDecoding,
+  }
+}
+
 function isEmptyRequest(value: unknown): boolean {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     && Object.keys(value).length === 0
 }
+
+class InvalidLocalModelRequest extends Error {}
 
 async function parsePostBody(
   req: IncomingMessage,
@@ -416,6 +439,92 @@ export async function handleDesktopProfileRollbackRequest(
     reportError('prepare last-known-good Profile restore', cause)
     finishJson(res, 409, error('last-known-good Profile could not be restored'))
   }
+}
+
+async function localModelRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  reportError: (operation: string, cause: unknown) => void,
+  operationName: string,
+  operation: (value: unknown) => Promise<object>,
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) return finishJson(res, 403, error('forbidden'))
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  try {
+    finishJson(res, 200, await operation(value))
+  } catch (cause) {
+    if (cause instanceof InvalidLocalModelRequest) {
+      return finishJson(res, 400, error(`invalid local model ${operationName} request`))
+    }
+    reportError(operationName, cause)
+    finishJson(res, 409, error(`local model ${operationName} failed`))
+  }
+}
+
+export async function handleDesktopLocalModelAddRequest(
+  req: IncomingMessage, res: ServerResponse, expectedOrigin: string,
+  controller: DesktopSettingsController, reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  await localModelRequest(req, res, expectedOrigin, reportError, 'selection', async value => {
+    if (!isEmptyRequest(value)) throw new InvalidLocalModelRequest()
+    return await controller.addLocalModel()
+  })
+}
+
+export async function handleDesktopLocalModelSelectRequest(
+  req: IncomingMessage, res: ServerResponse, expectedOrigin: string,
+  controller: DesktopSettingsController, reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  await localModelRequest(req, res, expectedOrigin, reportError, 'selection', async value => {
+    const request = parseLocalModelIdRequest(value)
+    if (request === undefined) throw new InvalidLocalModelRequest()
+    return await controller.selectLocalModel(request.id)
+  })
+}
+
+export async function handleDesktopLocalModelRemoveRequest(
+  req: IncomingMessage, res: ServerResponse, expectedOrigin: string,
+  controller: DesktopSettingsController, reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  await localModelRequest(req, res, expectedOrigin, reportError, 'removal', async value => {
+    const request = parseLocalModelIdRequest(value)
+    if (request === undefined) throw new InvalidLocalModelRequest()
+    return await controller.removeLocalModel(request.id)
+  })
+}
+
+export async function handleDesktopLocalModelConfigureRequest(
+  req: IncomingMessage, res: ServerResponse, expectedOrigin: string,
+  controller: DesktopSettingsController, reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  await localModelRequest(req, res, expectedOrigin, reportError, 'configuration', async value => {
+    const request = parseLocalModelConfiguration(value)
+    if (request === undefined) throw new InvalidLocalModelRequest()
+    return await controller.configureLocalModel(request)
+  })
+}
+
+export async function handleDesktopLocalModelStartRequest(
+  req: IncomingMessage, res: ServerResponse, expectedOrigin: string,
+  controller: DesktopSettingsController, reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  await localModelRequest(req, res, expectedOrigin, reportError, 'startup', async value => {
+    if (!isEmptyRequest(value)) throw new InvalidLocalModelRequest()
+    return await controller.startLocalModel()
+  })
+}
+
+export async function handleDesktopLocalModelStopRequest(
+  req: IncomingMessage, res: ServerResponse, expectedOrigin: string,
+  controller: DesktopSettingsController, reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  await localModelRequest(req, res, expectedOrigin, reportError, 'shutdown', async value => {
+    if (!isEmptyRequest(value)) throw new InvalidLocalModelRequest()
+    return await controller.stopLocalModel()
+  })
 }
 
 export const desktopSettingsRouteConstants = Object.freeze({

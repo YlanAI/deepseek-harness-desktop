@@ -101,6 +101,11 @@ import {
 } from './windows-volume-diagnostics.ts'
 import type { RendererBootReport } from './renderer-boot-contract.ts'
 import { desktopLocaleFromLanguageTag } from './tray-locale.ts'
+import {
+  chooseLocalLlamaPort,
+  LocalLlamaRuntime,
+  localLlamaRuntimeDirectory,
+} from './local-llama-runtime.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
 const PRODUCT_NAME = 'DSH Desktop'
@@ -458,6 +463,15 @@ async function start(): Promise<void> {
     startupStage = 'runtime-bootstrap'
     lifecycleRecorder.transitionStartupStage(startupStage)
     const installRecoveryStatePath = desktopInstallRecoveryStatePath(app.getPath('userData'))
+    const localLlama = new LocalLlamaRuntime({
+      platform: process.platform,
+      runtimeDir: localLlamaRuntimeDirectory(app.isPackaged, process.resourcesPath),
+      statePath: join(app.getPath('userData'), 'local-llama', 'state.json'),
+      privateDir: join(app.getPath('userData'), 'local-llama', 'runtime'),
+      port: await chooseLocalLlamaPort(),
+      logger: electronLogger,
+    })
+    const releaseLocalLlama = generation.own(async () => { await localLlama.dispose() })
     const environment = loadLayeredEnv(BIN_NAME, process.cwd())
     const electronVersion = process.versions.electron
     if (electronVersion === undefined) {
@@ -838,6 +852,11 @@ async function start(): Promise<void> {
         )
         hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
         hostCtx.provide('desktopRuntime', runtime)
+        hostCtx.provide('desktopLocalLlama', localLlama)
+        hostCtx.effect(
+          () => releaseLocalLlama,
+          'dsh-plugin-desktop: local llama.cpp runtime',
+        )
         hostCtx.provide('desktopPnpmBootstrap', desktopPnpmBootstrap)
         await hostCtx.plugin(DesktopActionsService, {
           openTerminal: () => { runtime.openTerminal() },
@@ -992,6 +1011,8 @@ async function start(): Promise<void> {
             })
           },
           prepareProfileRollback,
+          localLlama,
+          pickModelFile: () => runtime.pickModelFile(),
         }))
         provideCmdline(hostCtx, {
           args: ['--host', '127.0.0.1', '--port', String(prepared.port)],

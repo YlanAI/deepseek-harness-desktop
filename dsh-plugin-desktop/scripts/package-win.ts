@@ -144,6 +144,12 @@ export function packageWindowsArtifact(
     options.log('Skipping the Windows package preflight; the package gate already passed.')
   }
   options.run(
+    options.commandShell,
+    ['/d', '/s', '/c', 'corepack yarn workspace dsh-plugin-desktop runtime:fetch'],
+    options.workspaceRoot,
+    cleanEnvironment,
+  )
+  options.run(
     options.nodeExecutable,
     [
       options.builderCli,

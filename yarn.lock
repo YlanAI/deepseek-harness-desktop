@@ -2727,7 +2727,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-llm-pi-ai@npm:^0.1.1-rc.2":
+"@deepseek-ai/dsh-llm-pi-ai@npm:0.1.1-rc.2":
   version: 0.1.1-rc.2
   resolution: "@deepseek-ai/dsh-llm-pi-ai@npm:0.1.1-rc.2"
   dependencies:
@@ -2744,6 +2744,26 @@ __metadata:
     "@deepseek-ai/dsh-settings": ^0.1.1-rc.2
     "@deepseek-ai/dsh-timeout": ^0.1.1-rc.2
   checksum: 10c0/bbac1d7eca4c38e3c3e40e4cb297971e0174fad223484871351a602040ae03d1e91d28d30af3b13c8e756849d115a4fd9063438ba4a741aeb745e212613a9cb4
+  languageName: node
+  linkType: hard
+
+"@deepseek-ai/dsh-llm-pi-ai@patch:@deepseek-ai/dsh-llm-pi-ai@npm%3A0.1.1-rc.2#./patches/dsh-llm-pi-ai@0.1.1-rc.2.patch::locator=deepseek-harness-desktop%40workspace%3A.":
+  version: 0.1.1-rc.2
+  resolution: "@deepseek-ai/dsh-llm-pi-ai@patch:@deepseek-ai/dsh-llm-pi-ai@npm%3A0.1.1-rc.2#./patches/dsh-llm-pi-ai@0.1.1-rc.2.patch::version=0.1.1-rc.2&hash=46ecde&locator=deepseek-harness-desktop%40workspace%3A."
+  dependencies:
+    "@deepseek-ai/schemastery": "npm:^3.18.1"
+    "@earendil-works/pi-ai": "npm:^0.82.1"
+  peerDependencies:
+    "@deepseek-ai/cordis": ^4.0.1
+    "@deepseek-ai/dsh-attachment": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-authorization": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-credentials": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-invariants": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-launch-environment": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-llm": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-settings": ^0.1.1-rc.2
+    "@deepseek-ai/dsh-timeout": ^0.1.1-rc.2
+  checksum: 10c0/9d190fb7db29c71159e6806d3c3bbc070bd6260bb0c9974d1cb0fd44111bdbee06dd8daa0ded8ed365c13b56213a9428c5846f709441fc71cdbd71b684b73c3f
   languageName: node
   linkType: hard
 
@@ -8284,6 +8304,7 @@ __metadata:
     "@deepseek-ai/dsh-jobs": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-launch-environment": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-llm": "npm:0.1.1-rc.2"
+    "@deepseek-ai/dsh-llm-pi-ai": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-llm-retry": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-message-feedback": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-output-retention": "npm:0.1.1-rc.2"
@@ -8360,6 +8381,7 @@ __metadata:
     tsdown: "npm:0.22.2"
     tw-animate-css: "npm:^1.4.0"
     typescript: "npm:6.0.3"
+    undici-types: "npm:8.3.0"
     vite: "npm:8.2.1"
     vitest: "npm:4.1.8"
     yaml: "npm:^2.9.0"
@@ -13428,6 +13450,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"undici-types@npm:8.3.0, undici-types@npm:~8.3.0":
+  version: 8.3.0
+  resolution: "undici-types@npm:8.3.0"
+  checksum: 10c0/c8aa7e2fbebfce519654dafadc0ece59be888d2ccaf180fb4495da875e7b536d2456345c384069c7e6f3e9c9ab7435f074957da306f142343eee86ff8048855a
+  languageName: node
+  linkType: hard
+
 "undici-types@npm:~6.21.0":
   version: 6.21.0
   resolution: "undici-types@npm:6.21.0"
@@ -13439,13 +13468,6 @@ __metadata:
   version: 7.18.2
   resolution: "undici-types@npm:7.18.2"
   checksum: 10c0/85a79189113a238959d7a647368e4f7c5559c3a404ebdb8fc4488145ce9426fcd82252a844a302798dfc0e37e6fb178ff481ed03bc4caf634c5757d9ef43521d
-  languageName: node
-  linkType: hard
-
-"undici-types@npm:~8.3.0":
-  version: 8.3.0
-  resolution: "undici-types@npm:8.3.0"
-  checksum: 10c0/c8aa7e2fbebfce519654dafadc0ece59be888d2ccaf180fb4495da875e7b536d2456345c384069c7e6f3e9c9ab7435f074957da306f142343eee86ff8048855a
   languageName: node
   linkType: hard
 

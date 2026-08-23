@@ -223,7 +223,11 @@ corepack.cmd yarn dist:win-portable
 
 ## 模型体验
 
-无。desktop package 只改变应用组合与原生呈现，不增加任何模型可见的指令、工具、事件或请求字段。
+Windows x64 包会把固定且校验过哈希的 llama.cpp CUDA Runtime 作为 `extraResources` 打包；GGUF 文件始终位于安装包之外，由用户通过原生文件选择器登记。Electron main 进程拥有模型注册表、随机 loopback 端口、私有 API key、`llama-server` 子进程以及退出清理。Renderer 只接收模型名称、大小、选择状态和推理设置，不接收模型路径。
+
+`dsh-plugin-desktop/local-llama` 注册独立的 `local-llama` Provider，并通过现有 Pi AI adapter 使用 OpenAI-compatible loopback surface。第一次请求会惰性启动选中模型；设置界面也允许显式加载和卸载。现有 API Key Provider 不变，且不依赖 Ollama 或系统 CUDA Toolkit。开发和 Windows 打包会通过 `yarn runtime:fetch` 获取固定 Runtime；模型目录必须保持外置并由根 `.gitignore` 排除。
+
+desktop package 不增加任何模型可见的指令、工具、事件或请求字段。
 
 #### KV Cache 影响
 

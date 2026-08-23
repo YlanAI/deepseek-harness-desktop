@@ -49,6 +49,26 @@ describe('Desktop startup generation ownership', () => {
     expect(release).toHaveBeenCalledTimes(1)
   })
 
+  it('awaits an asynchronous resource release and shares its completion', async () => {
+    const target = generation()
+    let finish!: () => void
+    const release = vi.fn(async () => await new Promise<void>(resolve => { finish = resolve }))
+    const hostEffect = target.value.own(release)
+
+    const fromHost = hostEffect()
+    const fromGeneration = target.value.release()
+    await vi.waitFor(() => { expect(release).toHaveBeenCalledOnce() })
+    let settled = false
+    void fromGeneration.then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finish()
+
+    await expect(fromHost).resolves.toBeUndefined()
+    await expect(fromGeneration).resolves.toBeUndefined()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
   it('coalesces recovery quiescence and leaves resources alive until release', async () => {
     const target = generation()
     let finishHost!: () => void

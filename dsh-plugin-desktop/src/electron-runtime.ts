@@ -263,6 +263,19 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   }
 
   /** @inheritdoc */
+  async pickModelFile(): Promise<string | null> {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Select a GGUF model',
+      properties: ['openFile'],
+      filters: [{ name: 'GGUF models', extensions: ['gguf'] }],
+    }
+    const result = this.generation === undefined
+      ? await dialog.showOpenDialog(options)
+      : await this.generation.showOpenDialog(options)
+    return result.canceled ? null : result.filePaths[0] ?? null
+  }
+
+  /** @inheritdoc */
   async validateDirectory(path: string): Promise<boolean> {
     return await this.workspaceAdmission.validateDirectory(path)
   }
