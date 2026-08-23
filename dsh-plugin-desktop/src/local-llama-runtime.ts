@@ -163,6 +163,10 @@ function appendCapture(current: string, chunk: Buffer | string): string {
     : Buffer.from(next).subarray(-MAX_CAPTURE_BYTES).toString('utf8')
 }
 
+function reportsMissingMtpLayers(output: string): boolean {
+  return /context type MTP requested but model doesn't contain MTP layers/iu.test(output)
+}
+
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolveDelay, reject) => {
     if (signal?.aborted) return reject(signal.reason)
@@ -372,6 +376,10 @@ export class LocalLlamaRuntime {
       '--port', String(this.options.port),
       '--ctx-size', String(this.state.contextSize),
       '--n-gpu-layers', String(this.state.gpuLayers),
+      '--parallel', '1',
+      '--flash-attn', 'on',
+      '--cache-type-k', 'q8_0',
+      '--cache-type-v', 'q8_0',
       '--api-key-file', keyPath,
       '--jinja',
       '--no-webui',
@@ -410,7 +418,7 @@ export class LocalLlamaRuntime {
       }
       this.status = 'error'
       this.detail = `llama-server exited before it was stopped (code ${String(code)}, signal ${String(childSignal)}).`
-      this.options.logger.error(`${BIN_NAME}: ${this.detail}`)
+      if (!reportsMissingMtpLayers(this.stderr)) this.options.logger.error(`${BIN_NAME}: ${this.detail}`)
     })
     try {
       await this.waitUntilHealthy(child, signal)
@@ -418,7 +426,16 @@ export class LocalLlamaRuntime {
       this.status = 'ready'
       this.detail = undefined
     } catch (cause) {
+      const output = this.stderr
       await this.stopProcess()
+      if (this.state.speculativeDecoding && reportsMissingMtpLayers(output)) {
+        this.replaceState({ ...this.state, speculativeDecoding: false })
+        this.options.logger.error(
+          `${BIN_NAME}: selected GGUF has no MTP layers; speculative decoding was disabled automatically.`,
+        )
+        await this.startProcess(signal)
+        return
+      }
       const message = cause instanceof Error ? cause.message : String(cause)
       throw this.fail(message.includes(model.path) ? message.replaceAll(model.path, model.name) : message)
     }

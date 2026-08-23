@@ -114,6 +114,10 @@ describe('local llama.cpp runtime', () => {
       '--port', '42003',
       '--ctx-size', '32768',
       '--n-gpu-layers', '99',
+      '--parallel', '1',
+      '--flash-attn', 'on',
+      '--cache-type-k', 'q8_0',
+      '--cache-type-v', 'q8_0',
       '--api-key-file', join(paths.privateDir, 'api-key.txt'),
       '--jinja',
       '--no-webui',
@@ -127,6 +131,56 @@ describe('local llama.cpp runtime', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGTERM')
     await runtime.dispose()
     expect(existsSync(join(paths.privateDir, 'api-key.txt'))).toBe(false)
+  })
+
+  it('disables unsupported MTP decoding and retries the selected model', async () => {
+    const paths = fixture()
+    mkdirSync(paths.runtimeDir, { recursive: true })
+    writeFileSync(join(paths.runtimeDir, 'llama-server.exe'), '')
+    const unsupported = fakeChild()
+    const supported = fakeChild()
+    const unsupportedStderr = unsupported.stderr as PassThrough
+    const children = [unsupported, supported]
+    const calls: Array<{ args: readonly string[] }> = []
+    let healthChecks = 0
+    const runtimeLogger = logger()
+    const runtime = new LocalLlamaRuntime({
+      platform: 'win32',
+      runtimeDir: paths.runtimeDir,
+      statePath: paths.statePath,
+      privateDir: paths.privateDir,
+      port: 42_007,
+      logger: runtimeLogger,
+      spawn: (_command, args) => {
+        calls.push({ args })
+        return children.shift()!
+      },
+      fetch: vi.fn(async () => {
+        healthChecks += 1
+        if (healthChecks === 1) {
+          unsupportedStderr.write("context type MTP requested but model doesn't contain MTP layers\n")
+          unsupported.emit('close', 1, null)
+          return new Response('loading', { status: 503 })
+        }
+        return new Response('ok')
+      }),
+    })
+    await runtime.add(paths.modelPath)
+    await runtime.configure({ contextSize: 32_768, gpuLayers: 99, speculativeDecoding: true })
+
+    await expect(runtime.start()).resolves.toMatchObject({
+      status: 'ready',
+      speculativeDecoding: false,
+    })
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.args).toContain('draft-mtp')
+    expect(calls[1]?.args).not.toContain('draft-mtp')
+    expect(runtimeLogger.error).toHaveBeenCalledWith(expect.stringContaining('no MTP layers'))
+    expect(JSON.parse(readFileSync(paths.statePath, 'utf8'))).toMatchObject({
+      speculativeDecoding: false,
+    })
+
+    await runtime.dispose()
   })
 
   it.each([
