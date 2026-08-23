@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const adapterOptions = vi.hoisted(() => ({ value: undefined as Record<string, unknown> | undefined }))
@@ -15,7 +16,9 @@ vi.mock('@deepseek-ai/dsh-llm-pi-ai', () => ({
   },
 }))
 
-import { apply, inject, name } from '../src/local-llama.ts'
+import * as LocalLlamaPlugin from '../src/local-llama.ts'
+
+const { apply } = LocalLlamaPlugin
 
 describe('local llama.cpp Provider', () => {
   beforeEach(() => {
@@ -82,10 +85,13 @@ describe('local llama.cpp Provider', () => {
     }
     const llm = { registerAdapter }
     const ctx = new Context()
+    const loader = new Loader(ctx)
     ctx.provide('llm', llm)
     ctx.provide('desktopLocalLlama', runtime)
 
-    await expect(ctx.plugin({ name, inject, apply })).resolves.toBeDefined()
+    expect('default' in LocalLlamaPlugin).toBe(false)
+    expect(loader.unwrapExports(LocalLlamaPlugin)).toBe(LocalLlamaPlugin)
+    await expect(ctx.plugin(loader.unwrapExports(LocalLlamaPlugin))).resolves.toBeDefined()
     expect(registerAdapter).toHaveBeenCalledWith(['local-llama'], expect.anything())
 
     await ctx.fiber.dispose()

@@ -88,5 +88,3 @@ declare module '@deepseek-ai/cordis' {
     desktopLocalLlama: LocalLlamaRuntime
   }
 }
-
-export default apply
