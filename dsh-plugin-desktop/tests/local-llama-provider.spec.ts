@@ -1,3 +1,4 @@
+import { Context } from '@deepseek-ai/cordis'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const adapterOptions = vi.hoisted(() => ({ value: undefined as Record<string, unknown> | undefined }))
@@ -14,7 +15,7 @@ vi.mock('@deepseek-ai/dsh-llm-pi-ai', () => ({
   },
 }))
 
-import { apply } from '../src/local-llama.ts'
+import { apply, inject, name } from '../src/local-llama.ts'
 
 describe('local llama.cpp Provider', () => {
   beforeEach(() => {
@@ -69,5 +70,24 @@ describe('local llama.cpp Provider', () => {
 
     expect(registerAdapter).not.toHaveBeenCalled()
     expect(adapterOptions.value).toBeUndefined()
+  })
+
+  it('mounts through real Cordis fibers when Electron provides the local Runtime', async () => {
+    const runtime = {
+      baseURL: 'http://127.0.0.1:42001/v1',
+      apiKey: 'private-runtime-key',
+      activeModelName: () => 'model.gguf',
+      snapshot: () => ({ contextSize: 8_192 }),
+      ensureReady: vi.fn(async () => {}),
+    }
+    const llm = { registerAdapter }
+    const ctx = new Context()
+    ctx.provide('llm', llm)
+    ctx.provide('desktopLocalLlama', runtime)
+
+    await expect(ctx.plugin({ name, inject, apply })).resolves.toBeDefined()
+    expect(registerAdapter).toHaveBeenCalledWith(['local-llama'], expect.anything())
+
+    await ctx.fiber.dispose()
   })
 })

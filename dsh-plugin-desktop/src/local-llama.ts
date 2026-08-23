@@ -43,6 +43,7 @@ function profiles(runtime: LocalLlamaRuntime): ReadonlyMap<string, ResolvedPiAiP
 export function apply(ctx: Context): void {
   const runtime = ctx.get('desktopLocalLlama')
   if (runtime === undefined) return
+  const llm = ctx.llm
   let cachedFacts = ''
   let cachedProfiles: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
   const currentProfiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
@@ -76,7 +77,7 @@ export function apply(ctx: Context): void {
     },
   })
   ctx.effect(
-    () => ctx.llm.registerAdapter([LOCAL_LLAMA_PROVIDER], adapter),
+    () => llm.registerAdapter([LOCAL_LLAMA_PROVIDER], adapter),
     'dsh-plugin-desktop: local llama.cpp Provider',
   )
 }
