@@ -58,6 +58,7 @@ describe('local llama.cpp runtime', () => {
     })
 
     const view = await runtime.add(paths.modelPath)
+    expect(view).toMatchObject({ contextSize: 32_768, gpuLayers: 99, speculativeDecoding: false })
     expect(view.models).toEqual([
       expect.objectContaining({ name: 'outside-model.gguf', size: 4, selected: true }),
     ])
@@ -102,6 +103,7 @@ describe('local llama.cpp runtime', () => {
       fetch: vi.fn(async () => new Response('ok')),
     })
     await runtime.add(paths.modelPath)
+    await runtime.configure({ contextSize: 32_768, gpuLayers: 99, speculativeDecoding: true })
 
     await expect(runtime.start()).resolves.toMatchObject({ status: 'ready' })
     expect(calls).toHaveLength(1)
@@ -110,7 +112,7 @@ describe('local llama.cpp runtime', () => {
       '--model', paths.modelPath,
       '--host', '127.0.0.1',
       '--port', '42003',
-      '--ctx-size', '8192',
+      '--ctx-size', '32768',
       '--n-gpu-layers', '99',
       '--api-key-file', join(paths.privateDir, 'api-key.txt'),
       '--jinja',
@@ -125,6 +127,42 @@ describe('local llama.cpp runtime', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGTERM')
     await runtime.dispose()
     expect(existsSync(join(paths.privateDir, 'api-key.txt'))).toBe(false)
+  })
+
+  it.each([
+    [8_192, 32_768],
+    [16_384, 16_384],
+  ])('migrates v1 context %i to %i without losing the registry', (storedContext, expectedContext) => {
+    const paths = fixture()
+    writeFileSync(paths.statePath, `${JSON.stringify({
+      version: 1,
+      models: [{ id: 'model-1', path: paths.modelPath, name: 'outside-model.gguf', size: 4 }],
+      selectedModelId: 'model-1',
+      contextSize: storedContext,
+      gpuLayers: 42,
+      speculativeDecoding: true,
+    })}\n`)
+
+    const runtime = new LocalLlamaRuntime({
+      platform: 'win32',
+      runtimeDir: paths.runtimeDir,
+      statePath: paths.statePath,
+      privateDir: paths.privateDir,
+      port: 42_006,
+      logger: logger(),
+    })
+
+    expect(runtime.snapshot()).toMatchObject({
+      contextSize: expectedContext,
+      gpuLayers: 42,
+      speculativeDecoding: true,
+      selectedModelId: 'model-1',
+      models: [expect.objectContaining({ name: 'outside-model.gguf', selected: true })],
+    })
+    expect(JSON.parse(readFileSync(paths.statePath, 'utf8'))).toMatchObject({
+      version: 2,
+      contextSize: expectedContext,
+    })
   })
 
   it('reports unsupported platforms and resolves development and packaged locations', async () => {

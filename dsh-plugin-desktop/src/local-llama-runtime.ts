@@ -11,8 +11,9 @@ import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import type { DesktopLogger } from './desktop-logger.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
-const STATE_VERSION = 1
-const DEFAULT_CONTEXT_SIZE = 8_192
+const STATE_VERSION = 2
+const LEGACY_DEFAULT_CONTEXT_SIZE = 8_192
+const DEFAULT_CONTEXT_SIZE = 32_768
 const DEFAULT_GPU_LAYERS = 99
 const DEFAULT_STARTUP_TIMEOUT_MS = 10 * 60_000
 const HEALTH_POLL_MS = 500
@@ -50,12 +51,21 @@ interface LocalLlamaModelRecord {
 }
 
 interface LocalLlamaState {
-  readonly version: 1
+  readonly version: 2
   readonly models: readonly LocalLlamaModelRecord[]
   readonly selectedModelId?: string
   readonly contextSize: number
   readonly gpuLayers: number
   readonly speculativeDecoding: boolean
+}
+
+interface StoredLocalLlamaState {
+  readonly version?: unknown
+  readonly models?: unknown
+  readonly selectedModelId?: unknown
+  readonly contextSize?: unknown
+  readonly gpuLayers?: unknown
+  readonly speculativeDecoding?: unknown
 }
 
 export interface LocalLlamaConfiguration {
@@ -82,7 +92,7 @@ function defaultState(): LocalLlamaState {
     models: Object.freeze([]),
     contextSize: DEFAULT_CONTEXT_SIZE,
     gpuLayers: DEFAULT_GPU_LAYERS,
-    speculativeDecoding: true,
+    speculativeDecoding: false,
   })
 }
 
@@ -102,8 +112,8 @@ function modelRecord(value: unknown): LocalLlamaModelRecord | undefined {
 
 function parseState(value: unknown): LocalLlamaState {
   if (value === null || typeof value !== 'object') return defaultState()
-  const record = value as Partial<LocalLlamaState>
-  if (record.version !== STATE_VERSION || !Array.isArray(record.models)
+  const record = value as StoredLocalLlamaState
+  if ((record.version !== 1 && record.version !== STATE_VERSION) || !Array.isArray(record.models)
     || !integer(record.contextSize, 512, 262_144)
     || !integer(record.gpuLayers, 0, 999)
     || typeof record.speculativeDecoding !== 'boolean') return defaultState()
@@ -120,7 +130,9 @@ function parseState(value: unknown): LocalLlamaState {
     version: STATE_VERSION,
     models: Object.freeze(complete),
     ...(selectedModelId === undefined ? {} : { selectedModelId }),
-    contextSize: record.contextSize,
+    contextSize: record.version === 1 && record.contextSize === LEGACY_DEFAULT_CONTEXT_SIZE
+      ? DEFAULT_CONTEXT_SIZE
+      : record.contextSize,
     gpuLayers: record.gpuLayers,
     speculativeDecoding: record.speculativeDecoding,
   })
@@ -128,7 +140,10 @@ function parseState(value: unknown): LocalLlamaState {
 
 function readState(path: string): LocalLlamaState {
   try {
-    return parseState(JSON.parse(readFileSync(path, 'utf8')) as unknown)
+    const source = JSON.parse(readFileSync(path, 'utf8')) as { readonly version?: unknown }
+    const state = parseState(source)
+    if (source.version !== STATE_VERSION) writeState(path, state)
+    return state
   } catch {
     return defaultState()
   }
@@ -465,7 +480,7 @@ export class LocalLlamaRuntime {
     return this.state.models.find(model => model.id === this.state.selectedModelId)
   }
 
-  private replaceState(next: Omit<LocalLlamaState, 'version'> & { readonly version?: 1 }): void {
+  private replaceState(next: Omit<LocalLlamaState, 'version'> & { readonly version?: 2 }): void {
     const normalized = parseState({ ...next, version: STATE_VERSION })
     writeState(this.options.statePath, normalized)
     this.state = normalized

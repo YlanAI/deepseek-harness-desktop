@@ -28,7 +28,7 @@ describe('local llama.cpp Provider', () => {
 
   it('registers a dedicated Provider and starts the runtime only when credentials are resolved', async () => {
     const ensureReady = vi.fn(async () => {})
-    const snapshot = vi.fn(() => ({ contextSize: 8_192 }))
+    const snapshot = vi.fn(() => ({ contextSize: 32_768 }))
     const runtime = {
       baseURL: 'http://127.0.0.1:42001/v1',
       apiKey: 'private-runtime-key',
@@ -57,7 +57,25 @@ describe('local llama.cpp Provider', () => {
       displayName: 'Local GGUF (llama.cpp)',
       api: 'openai-completions',
       baseURL: runtime.baseURL,
-      models: [expect.objectContaining({ id: 'active-gguf', name: 'model.gguf' })],
+      defaultContextWindow: 32_768,
+      defaultMaxTokens: 8_192,
+      reasoning: 'off',
+      compat: {
+        supportsDeveloperRole: false,
+        thinkingFormat: 'chat-template',
+        chatTemplateKwargs: {
+          enable_thinking: { $var: 'thinking.enabled' },
+          reasoning_effort: { $var: 'thinking.effort', omitWhenOff: true },
+          preserve_thinking: true,
+        },
+      },
+      models: [expect.objectContaining({
+        id: 'active-gguf',
+        name: 'model.gguf',
+        contextWindow: 32_768,
+        maxTokens: 8_192,
+        reasoningEfforts: { off: 'none', low: 'low', medium: 'medium', xhigh: 'xhigh' },
+      })],
     })
   })
 
@@ -80,7 +98,7 @@ describe('local llama.cpp Provider', () => {
       baseURL: 'http://127.0.0.1:42001/v1',
       apiKey: 'private-runtime-key',
       activeModelName: () => 'model.gguf',
-      snapshot: () => ({ contextSize: 8_192 }),
+      snapshot: () => ({ contextSize: 32_768 }),
       ensureReady: vi.fn(async () => {}),
     }
     const llm = { registerAdapter }

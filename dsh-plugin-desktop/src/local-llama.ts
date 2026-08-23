@@ -17,21 +17,42 @@ import {
 export const name = 'desktop-local-llama'
 export const inject = ['llm']
 
+function maxOutputTokens(contextSize: number): number {
+  return Math.min(8_192, Math.max(512, Math.floor(contextSize / 4)))
+}
+
 function profiles(runtime: LocalLlamaRuntime): ReadonlyMap<string, ResolvedPiAiProviderProfile> {
   const snapshot = runtime.snapshot()
+  const maxTokens = maxOutputTokens(snapshot.contextSize)
   return resolveProfiles({
     [LOCAL_LLAMA_PROVIDER]: {
       displayName: 'Local GGUF (llama.cpp)',
       api: 'openai-completions',
       baseURL: runtime.baseURL,
       defaultContextWindow: snapshot.contextSize,
-      defaultMaxTokens: Math.min(32_768, Math.max(512, Math.floor(snapshot.contextSize / 2))),
+      defaultMaxTokens: maxTokens,
+      reasoning: 'off',
+      compat: {
+        supportsDeveloperRole: false,
+        thinkingFormat: 'chat-template',
+        chatTemplateKwargs: {
+          enable_thinking: { $var: 'thinking.enabled' },
+          reasoning_effort: { $var: 'thinking.effort', omitWhenOff: true },
+          preserve_thinking: true,
+        },
+      },
       models: [{
         id: LOCAL_LLAMA_MODEL,
         name: runtime.activeModelName() ?? 'Select a local GGUF model',
         contextWindow: snapshot.contextSize,
-        maxTokens: Math.min(32_768, Math.max(512, Math.floor(snapshot.contextSize / 2))),
+        maxTokens,
         input: ['text'],
+        reasoningEfforts: {
+          off: 'none',
+          low: 'low',
+          medium: 'medium',
+          xhigh: 'xhigh',
+        },
       }],
       retryPolicy: { mode: 'normal', maxRetries: 1 },
       streamIdleTimeoutMs: 10 * 60_000,
